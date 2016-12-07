@@ -1,12 +1,12 @@
 package com.chimpler.javacv
 
-import org.bytedeco.javacpp.helper.opencv_core.AbstractCvScalar
 import org.bytedeco.javacpp.opencv_core._
 import org.bytedeco.javacpp.opencv_objdetect.CascadeClassifier
-import org.bytedeco.javacpp.{opencv_imgproc, opencv_core}
+import org.bytedeco.javacpp.{opencv_core, opencv_imgproc}
 import org.bytedeco.javacv.FrameGrabber.ImageMode
-import org.bytedeco.javacv.{OpenCVFrameGrabber, CanvasFrame}
-import scala.collection.mutable
+import org.bytedeco.javacv.{CanvasFrame, Frame, OpenCVFrameConverter, OpenCVFrameGrabber}
+
+import org.bytedeco.javacpp.opencv_imgproc.CvFont
 
 /**
  * Created by chimpler on 7/13/14.
@@ -33,21 +33,25 @@ object FaceWebcamDetectorApp extends App {
     val rightEyeCascade = new CascadeClassifier(rightEyeXml)
 
     def detect(greyMat: Mat): Seq[Face] = {
-      val faceRects = new Rect()
+      val faceRects = new RectVector()
       faceCascade.detectMultiScale(greyMat, faceRects)
-      for(i <- 0 until faceRects.limit()) yield {
-        val faceRect = faceRects.position(i)
+      for(i <- 0 until faceRects.limit().toInt) yield {
+        val faceRect = faceRects.get(i)
 
         // the left eye should be in the top-left quarter of the face area
         val leftFaceMat = new Mat(greyMat, new Rect(faceRect.x, faceRect.y, faceRect.width() / 2, faceRect.height() / 2))
-        val leftEyeRect = new Rect()
+        val leftEyeRect = new RectVector()
         leftEyeCascade.detectMultiScale(leftFaceMat, leftEyeRect)
 
         // the right eye should be in the top-right quarter of the face area
         val rightFaceMat = new Mat(greyMat, new Rect(faceRect.x + faceRect.width() / 2, faceRect.y, faceRect.width() / 2, faceRect.height() / 2))
-        val rightEyeRect = new Rect()
+        val rightEyeRect = new RectVector()
         rightEyeCascade.detectMultiScale(rightFaceMat, rightEyeRect)
-        Face(i, cloneRect(faceRect), cloneRect(leftEyeRect), cloneRect(rightEyeRect))
+        if (rightEyeRect.size() > 0 && leftEyeRect.size() > 0) {
+          Face(i, cloneRect(faceRect), cloneRect(leftEyeRect.get(0)), cloneRect(rightEyeRect.get(0)))
+        } else {
+          Face(i, new Rect(0, 0, 10, 10), new Rect(5, 5, 5, 5), new Rect(10, 10, 5, 5))
+        }
       }
     }
   }
@@ -72,16 +76,18 @@ object FaceWebcamDetectorApp extends App {
   cvFont.vscale(0.6f)
   cvFont.font_face(FONT_HERSHEY_SIMPLEX)
 
-  val mat = new Mat(640, 480, CV_8UC3)
-  val greyMat = new Mat(640, 480, CV_8U)
+  val converterToMat = new OpenCVFrameConverter.ToMat();
+
+  var mat: Mat = new Mat(640, 480, CV_8UC3)
+  val greyMat: Mat = new Mat(640, 480, CV_8U)
   var faces: Seq[Face] = Nil
   while (true) {
-    val img = grabber.grab()
-    cvFlip(img, img, 1)
+    val img: Frame = grabber.grab()
+//    cvMirror(img, img, 1)
 
     // run the recognition every 200ms to not use too much CPU
     if (System.currentTimeMillis() - lastRecognitionTime > 200) {
-      mat.copyFrom(img.getBufferedImage)
+      mat = converterToMat.convert(img)
       opencv_imgproc.cvtColor(mat, greyMat, opencv_imgproc.CV_BGR2GRAY, 1)
       opencv_imgproc.equalizeHist(greyMat, greyMat)
       faces = faceDetector.detect(greyMat)
@@ -91,31 +97,31 @@ object FaceWebcamDetectorApp extends App {
     // draw the face rectangles with the eyes and caption
     for(f <- faces) {
       // draw the face rectangle
-      cvRectangle(img,
-        opencv_core.cvPoint(f.faceRect.x, f.faceRect.y),
-        opencv_core.cvPoint(f.faceRect.x + f.faceRect.width, f.faceRect.y + f.faceRect.height),
-        AbstractCvScalar.RED,
-        1, CV_AA, 0)
+      opencv_imgproc.rectangle(mat,
+        new opencv_core.Point(f.faceRect.x, f.faceRect.y),
+        new opencv_core.Point(f.faceRect.x + f.faceRect.width, f.faceRect.y + f.faceRect.height),
+        new Scalar(255, 0, 0, 0)
+      )
 
       // draw the left eye rectangle
-      cvRectangle(img,
-        opencv_core.cvPoint(f.faceRect.x + f.leftEyeRect.x, f.faceRect.y + f.leftEyeRect.y),
-        opencv_core.cvPoint(f.faceRect.x + f.leftEyeRect.x + f.leftEyeRect.width, f.faceRect.y + f.leftEyeRect.y + f.leftEyeRect.height),
-        AbstractCvScalar.BLUE,
-        1, CV_AA, 0)
+      opencv_imgproc.rectangle(mat,
+        new opencv_core.Point(f.faceRect.x + f.leftEyeRect.x, f.faceRect.y + f.leftEyeRect.y),
+        new opencv_core.Point(f.faceRect.x + f.leftEyeRect.x + f.leftEyeRect.width, f.faceRect.y + f.leftEyeRect.y + f.leftEyeRect.height),
+        new Scalar(0, 0, 255, 0)
+      )
 
       // draw the right eye rectangle
-      cvRectangle(img,
-        opencv_core.cvPoint(f.faceRect.x + f.faceRect.width / 2 + f.rightEyeRect.x, f.faceRect.y + f.rightEyeRect.y),
-        opencv_core.cvPoint(f.faceRect.x + f.faceRect.width / 2 + f.rightEyeRect.x + f.rightEyeRect.width, f.faceRect.y + f.rightEyeRect.y + f.rightEyeRect.height),
-        AbstractCvScalar.GREEN,
-        1, CV_AA, 0)
+      opencv_imgproc.rectangle(mat,
+        new opencv_core.Point(f.faceRect.x + f.faceRect.width / 2 + f.rightEyeRect.x, f.faceRect.y + f.rightEyeRect.y),
+        new opencv_core.Point(f.faceRect.x + f.faceRect.width / 2 + f.rightEyeRect.x + f.rightEyeRect.width, f.faceRect.y + f.rightEyeRect.y + f.rightEyeRect.height),
+        new Scalar(0, 255, 0, 0)
+      )
 
       // draw the face number
-      val cvPoint = opencv_core.cvPoint(f.faceRect.x, f.faceRect.y - 20)
-      cvPutText(img, s"Face ${f.id}", cvPoint, cvFont, AbstractCvScalar.RED)
+//      val cvPoint = opencv_core.cvPoint(f.faceRect.x, f.faceRect.y - 20)
+//      cvPutText(img, s"Face ${f.id}", cvPoint, cvFont, AbstractCvScalar.RED)
     }
-    canvas.showImage(img)
+    canvas.showImage(converterToMat.convert(mat))
   }
 
 }

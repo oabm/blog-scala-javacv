@@ -2,15 +2,15 @@ name := "javacv-webcam"
 
 organization := "com.chimpler"
 
-val javacvVersion = "0.9"
+val javacvVersion = "1.2"
 
-val javacppVersion = "0.9"
+val javacppVersion = "1.2"
 
 version := "1.0-SNAPSHOT"
 
 scalaVersion := "2.10.4"
 
-scalacOptions ++= Seq("-unchecked", "-deprecation", "-optimize", "-Xlint")
+scalacOptions ++= Seq("-unchecked", "-deprecation", "-optimize", "-Xlint", "-Djavacpp.platform.dependencies=true")
 
 // Some dependencies like `javacpp` are packaged with maven-plugin packaging
 classpathTypes += "maven-plugin"
@@ -52,8 +52,8 @@ libraryDependencies ++= Seq(
     ExclusionRule(organization = "org.bytedeco.javacpp-presets"),
     ExclusionRule(organization = "org.bytedeco.javacpp")
     ),
-  "org.bytedeco.javacpp-presets" % "opencv"  % ("2.4.9-" + javacppVersion) classifier "",
-  "org.bytedeco.javacpp-presets" % "opencv"  % ("2.4.9-" + javacppVersion) classifier platform,
+  "org.bytedeco.javacpp-presets" % "opencv"  % ("3.1.0-" + javacppVersion) classifier "",
+  "org.bytedeco.javacpp-presets" % "opencv"  % ("3.1.0-" + javacppVersion) classifier platform,
   "org.bytedeco"                 % "javacpp" % javacppVersion,
   "org.scala-lang"               % "scala-swing"     % scalaVersion.value,
   "net.imagej"                   % "ij"              % "1.47v",
